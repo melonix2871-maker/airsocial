@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>P2P Social Network</title>
+    <link rel="stylesheet" href="styles.css">
+    <!-- Passkeys/WebAuthn will use browser's native API -->
+</head>
+<body>
+    <div class="app-container">
+        <!-- Auth Screen -->
+        <div id="auth-screen" class="screen active">
+            <div class="auth-card">
+                <h1>🌐 P2P Social Network</h1>
+                <p class="subtitle">Serverless. Encrypted. Yours.</p>
+                
+                <div class="auth-buttons">
+                    <button id="login-passkey-btn" class="btn-primary">
+                        🔑 Sign in with Passkey
+                    </button>
+                    <button id="register-passkey-btn" class="btn-secondary">
+                        📝 Create new account
+                    </button>
+                </div>
+                
+                <div class="status" id="auth-status"></div>
+            </div>
+        </div>
+
+        <!-- Main App Screen -->
+        <div id="app-screen" class="screen">
+            <!-- Sidebar -->
+            <aside class="sidebar">
+                <div class="user-profile" id="user-profile">
+                    <div class="avatar" id="user-avatar">👤</div>
+                    <div class="user-info">
+                        <span class="username" id="username">Loading...</span>
+                        <span class="peer-status" id="peer-status">Connecting...</span>
+                    </div>
+                </div>
+                
+                <div class="connections-panel">
+                    <h3>Connected Peers</h3>
+                    <div id="peers-list" class="peers-list">
+                        <div class="placeholder">No peers connected</div>
+                    </div>
+                </div>
+                
+                <button id="logout-btn" class="logout-btn">🚪 Sign Out</button>
+            </aside>
+
+            <!-- Main Content -->
+            <main class="main-content">
+                <!-- Feed -->
+                <div class="feed-container">
+                    <div class="post-creator">
+                        <textarea id="post-content" placeholder="What's on your mind?" maxlength="500"></textarea>
+                        <div class="post-actions">
+                            <button id="post-btn" class="btn-post">📤 Post</button>
+                            <span id="char-count">0/500</span>
+                        </div>
+                    </div>
+                    
+                    <div id="feed" class="feed">
+                        <!-- Posts will appear here -->
+                    </div>
+                </div>
+                
+                <!-- Chat Panel -->
+                <div class="chat-container">
+                    <div class="chat-header">
+                        <h3>💬 Direct Messages</h3>
+                        <select id="chat-peer-select">
+                            <option value="">Select a peer...</option>
+                        </select>
+                    </div>
+                    <div id="chat-messages" class="chat-messages">
+                        <div class="placeholder">Select a peer to start chatting</div>
+                    </div>
+                    <div class="chat-input-area">
+                        <input type="text" id="chat-input" placeholder="Type a message..." disabled>
+                        <button id="chat-send-btn" disabled>Send</button>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/webconnect@0.0.12/dist/umd/webconnect.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/webtorrent@latest/webtorrent.min.js"></script>
+    <script type="module" src="app.js"></script>
+</body>
+</html>

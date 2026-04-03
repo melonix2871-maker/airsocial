@@ -12,8 +12,8 @@
     <script src="https://cdn.jsdelivr.net/npm/webrtc-adapter@8.2.3/adapter.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/simple-peer@9.11.1/simplepeer.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/webconnect.js@1.2.0/dist/webconnect.min.js"></script>
-    <!-- WebTorrent with proper global export -->
-    <script src="https://cdn.jsdelivr.net/npm/webtorrent@2.2.0/webtorrent.min.js"></script>
+    <!-- WebTorrent - using correct CDN with proper export -->
+    <script src="https://cdn.jsdelivr.net/npm/webtorrent@0.128.0/webtorrent.min.js"></script>
     <style>
         * { transition: all 0.2s ease; }
         body { background: #f5f7fb; font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; }
@@ -28,7 +28,7 @@
         .video-element { width: 100%; border-radius: 16px; background: #000; }
         .reaction-btn { background: none; border: none; font-size: 1.2rem; transition: 0.1s; }
         .reaction-btn:hover { transform: scale(1.15); }
-        .auth-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 2000; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(8px); }
+        .auth-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 2000; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(8px); }
         .auth-card { max-width: 450px; width: 90%; }
         .logout-btn { cursor: pointer; }
         @media (max-width: 768px) { .video-chat-container { width: 240px; bottom: 10px; right: 10px; } }
@@ -39,13 +39,18 @@
 <!-- Auth Modal / Overlay -->
 <div id="authOverlay" class="auth-overlay">
     <div class="card auth-card p-4 shadow-lg rounded-4">
-        <div class="text-center mb-3"><h2 class="navbar-brand">🌐 OatNet</h2><p class="text-muted">Passwordless WebAuthn Social Network</p></div>
+        <div class="text-center mb-3">
+            <h2 class="navbar-brand" style="font-size: 2rem;">🌐 OatNet</h2>
+            <p class="text-muted">Passwordless WebAuthn Social Network</p>
+            <p class="small text-info"><i class="bi bi-shield-lock"></i> Uses biometric/passkey authentication</p>
+        </div>
         <div id="authForms">
             <div id="loginForm">
                 <input type="text" id="loginUsername" class="form-control mb-2" placeholder="Username (your unique ID)">
-                <button id="loginBtn" class="btn btn-primary w-100 mb-2"><i class="bi bi-fingerprint"></i> Login with WebAuthn</button>
-                <hr><button id="showRegisterBtn" class="btn btn-outline-secondary w-100">Create Account</button>
-                <button id="showForgotBtn" class="btn btn-link w-100 small mt-2">Forgot Password? (OTP via Email)</button>
+                <button id="loginBtn" class="btn btn-primary w-100 mb-2"><i class="bi bi-fingerprint"></i> Login with Passkey</button>
+                <hr>
+                <button id="showRegisterBtn" class="btn btn-outline-secondary w-100">Create New Account</button>
+                <button id="showForgotBtn" class="btn btn-link w-100 small mt-2">Forgot Password? (OTP Recovery)</button>
             </div>
             <div id="registerForm" style="display:none;">
                 <input type="text" id="regUsername" class="form-control mb-2" placeholder="Choose username">
@@ -55,11 +60,10 @@
             </div>
             <div id="forgotForm" style="display:none;">
                 <input type="text" id="forgotUsername" class="form-control mb-2" placeholder="Username">
-                <button id="sendOtpBtn" class="btn btn-warning w-100">Send Time-based OTP</button>
-                <div id="otpSection" style="display:none;">
+                <button id="sendOtpBtn" class="btn btn-warning w-100">Send Recovery OTP</button>
+                <div id="otpSection" style="display:none; margin-top: 10px;">
                     <input type="text" id="otpCode" class="form-control mt-2 mb-2" placeholder="Enter 6-digit OTP">
-                    <input type="password" id="newPassword" class="form-control mb-2" placeholder="New credential name">
-                    <button id="resetWithOtpBtn" class="btn btn-danger w-100">Reset & Login</button>
+                    <button id="resetWithOtpBtn" class="btn btn-danger w-100">Reset Account & Create New Passkey</button>
                 </div>
                 <button id="backToLoginFromForgotBtn" class="btn btn-link w-100 mt-2">Back</button>
             </div>
@@ -77,7 +81,7 @@
         </div>
         
         <ul class="nav nav-pills mb-4 justify-content-center gap-2 bg-white p-2 rounded-4 shadow-sm" id="mainTabs" role="tablist">
-            <li class="nav-item"><button class="nav-link active" id="feed-tab-btn" data-bs-toggle="pill" data-bs-target="#feedPanel"><i class="bi bi-house-door-fill"></i> Home</button></li>
+            <li class="nav-item"><button class="nav-link active" id="feed-tab-btn" data-bs-toggle="pill" data-bs-target="#feedPanel"><i class="bi bi-house-door-fill"></i> Home Feed</button></li>
             <li class="nav-item"><button class="nav-link" id="profile-tab-btn" data-bs-toggle="pill" data-bs-target="#profilePanel"><i class="bi bi-person-circle"></i> Profile</button></li>
             <li class="nav-item"><button class="nav-link" id="chat-tab-btn" data-bs-toggle="pill" data-bs-target="#chatPanel"><i class="bi bi-chat-dots-fill"></i> Chat</button></li>
             <li class="nav-item"><button class="nav-link" id="torrent-tab-btn" data-bs-toggle="pill" data-bs-target="#torrentPanel"><i class="bi bi-cloud-arrow-down-fill"></i> Media Torrent</button></li>
@@ -89,17 +93,27 @@
                 <div class="row">
                     <div class="col-lg-8 mx-auto">
                         <div class="card p-3 mb-4 border-0 shadow-sm rounded-4">
-                            <textarea id="postContent" class="form-control mb-2" rows="2" placeholder="What's on your mind? (P2P broadcast)"></textarea>
+                            <textarea id="postContent" class="form-control mb-2" rows="2" placeholder="What's on your mind? (P2P broadcast to all peers)"></textarea>
                             <div class="d-flex gap-2">
-                                <button id="attachMediaBtn" class="btn btn-outline-secondary btn-sm"><i class="bi bi-image"></i> Attach</button>
+                                <button id="attachMediaBtn" class="btn btn-outline-secondary btn-sm"><i class="bi bi-image"></i> Attach Photo/Video</button>
                                 <button id="publishPostBtn" class="btn btn-primary rounded-pill px-4"><i class="bi bi-send"></i> Post</button>
                             </div>
-                            <div id="uploadProgressContainer" class="mt-2" style="display:none;"><div class="progress"><div id="uploadProgressBar" class="progress-bar" style="width:0%">0%</div></div></div>
+                            <div id="uploadProgressContainer" class="mt-2" style="display:none;">
+                                <div class="progress" style="height: 6px;">
+                                    <div id="uploadProgressBar" class="progress-bar" style="width:0%"></div>
+                                </div>
+                                <small class="text-muted">Uploading...</small>
+                            </div>
                         </div>
                         <div id="feedList" class="d-flex flex-column gap-3"></div>
                     </div>
                     <div class="col-lg-3 d-none d-lg-block">
-                        <div class="card p-3 rounded-4"><h6><i class="bi bi-people-fill"></i> Online Peers <span id="peerCount">0</span></h6><div id="onlinePeersList"></div><hr><button id="startVideoCallBtn" class="btn btn-danger btn-sm rounded-pill w-100"><i class="bi bi-camera-video-fill"></i> Video Call</button></div>
+                        <div class="card p-3 rounded-4">
+                            <h6><i class="bi bi-people-fill"></i> Online Peers <span id="peerCount" class="badge bg-primary">0</span></h6>
+                            <div id="onlinePeersList" class="small text-muted" style="max-height: 200px; overflow-y: auto;"></div>
+                            <hr>
+                            <button id="startVideoCallBtn" class="btn btn-danger btn-sm rounded-pill w-100"><i class="bi bi-camera-video-fill"></i> Start Video Call</button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -114,14 +128,17 @@
                                 <img id="profileAvatar" class="avatar-md mb-2">
                                 <h3 id="profileName"></h3>
                                 <p id="profileBio" class="text-muted"></p>
-                                <div class="d-flex gap-2 justify-content-center">
-                                    <button id="editProfileBtn" class="btn btn-outline-primary btn-sm rounded-pill"><i class="bi bi-pencil"></i> Edit</button>
-                                    <button id="uploadAvatarBtn" class="btn btn-outline-secondary btn-sm rounded-pill"><i class="bi bi-camera"></i> Avatar</button>
-                                    <button id="uploadCoverBtn" class="btn btn-outline-secondary btn-sm rounded-pill"><i class="bi bi-image"></i> Cover</button>
+                                <div class="d-flex gap-2 justify-content-center flex-wrap">
+                                    <button id="editProfileBtn" class="btn btn-outline-primary btn-sm rounded-pill"><i class="bi bi-pencil"></i> Edit Profile</button>
+                                    <button id="uploadAvatarBtn" class="btn btn-outline-secondary btn-sm rounded-pill"><i class="bi bi-camera"></i> Change Avatar</button>
+                                    <button id="uploadCoverBtn" class="btn btn-outline-secondary btn-sm rounded-pill"><i class="bi bi-image"></i> Change Cover</button>
                                 </div>
                             </div>
                         </div>
-                        <div class="mt-4"><h5>My Wall</h5><div id="profileWallPosts" class="d-flex flex-column gap-3 mt-3"></div></div>
+                        <div class="mt-4">
+                            <h5><i class="bi bi-journal-bookmark-fill"></i> My Posts</h5>
+                            <div id="profileWallPosts" class="d-flex flex-column gap-3 mt-3"></div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -129,37 +146,64 @@
             <!-- Chat Panel -->
             <div class="tab-pane fade" id="chatPanel">
                 <div class="row">
-                    <div class="col-md-4"><div class="card rounded-4 p-2"><h6>Connected peers</h6><div id="chatPeerList" class="list-group list-group-flush"></div></div></div>
-                    <div class="col-md-8"><div class="card rounded-4" style="height: 500px; display: flex; flex-direction: column;"><div id="chatMessages" style="flex:1; overflow-y: auto; padding: 1rem;"></div><div class="p-2 border-top d-flex gap-2"><input type="text" id="chatInput" class="form-control" placeholder="Message..."><button id="sendChatBtn" class="btn btn-primary rounded-pill">Send</button></div></div></div>
+                    <div class="col-md-4">
+                        <div class="card rounded-4 p-2">
+                            <h6><i class="bi bi-chat-text"></i> Connected Peers</h6>
+                            <div id="chatPeerList" class="list-group list-group-flush" style="max-height: 400px; overflow-y: auto;"></div>
+                        </div>
+                    </div>
+                    <div class="col-md-8">
+                        <div class="card rounded-4" style="height: 500px; display: flex; flex-direction: column;">
+                            <div id="chatMessages" style="flex:1; overflow-y: auto; padding: 1rem;"></div>
+                            <div class="p-2 border-top d-flex gap-2">
+                                <input type="text" id="chatInput" class="form-control" placeholder="Type message..." onkeypress="if(event.key==='Enter') sendChatMessage()">
+                                <button id="sendChatBtn" class="btn btn-primary rounded-pill">Send</button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
             <!-- Torrent Panel -->
             <div class="tab-pane fade" id="torrentPanel">
-                <div class="card p-3 rounded-4"><h5><i class="bi bi-magnet-fill"></i> WebTorrent Catalog</h5><div class="input-group mb-3"><input type="text" id="magnetInput" class="form-control" placeholder="magnet:?xt=urn:btih:..."><button id="addMagnetBtn" class="btn btn-dark">Stream</button></div><div id="torrentFilesList" class="row"></div></div>
+                <div class="card p-3 rounded-4">
+                    <h5><i class="bi bi-magnet-fill"></i> WebTorrent Media Catalog</h5>
+                    <p class="small text-muted">Stream video/audio directly via P2P torrents</p>
+                    <div class="input-group mb-3">
+                        <input type="text" id="magnetInput" class="form-control" placeholder="magnet:?xt=urn:btih:... or info hash">
+                        <button id="addMagnetBtn" class="btn btn-dark">Add & Stream</button>
+                    </div>
+                    <div id="torrentFilesList" class="row"></div>
+                </div>
             </div>
         </div>
     </div>
 </div>
 
-<div id="videoCallPanel" class="video-chat-container p-2"><div class="d-flex justify-content-between"><strong class="text-white">Video Call</strong><button id="closeVideoBtn" class="btn-close btn-close-white"></button></div><video id="localVideo" autoplay muted playsinline class="video-element mb-1"></video><video id="remoteVideo" autoplay playsinline class="video-element"></video></div>
+<!-- Floating video chat panel -->
+<div id="videoCallPanel" class="video-chat-container p-2">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+        <strong class="text-white">Video Call Active</strong>
+        <button id="closeVideoBtn" class="btn-close btn-close-white"></button>
+    </div>
+    <video id="localVideo" autoplay muted playsinline class="video-element mb-1" style="height: 140px;"></video>
+    <video id="remoteVideo" autoplay playsinline class="video-element" style="height: 140px;"></video>
+</div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
 <script>
 // ---------------------------- WEBAUTHN AUTH SYSTEM ----------------------------
 let currentUser = null;
-let userCredentials = JSON.parse(localStorage.getItem('webauthn_users') || '{}'); // { username: { id, email, publicKey, credentialName } }
+let userCredentials = JSON.parse(localStorage.getItem('webauthn_users') || '{}');
 
-// Helper: generate random challenge
 function randomChallenge() { return crypto.getRandomValues(new Uint8Array(32)); }
 
-// Register with WebAuthn
 async function registerWebAuthn(username, email) {
-    if(userCredentials[username]) throw new Error('Username exists');
+    if(userCredentials[username]) throw new Error('Username already exists');
     const challenge = randomChallenge();
     const publicKeyCredentialCreationOptions = {
         challenge: challenge,
-        rp: { name: "OatNet P2P Social", id: window.location.hostname },
+        rp: { name: "OatNet P2P Social", id: window.location.hostname || "localhost" },
         user: { id: new TextEncoder().encode(username), name: username, displayName: username },
         pubKeyCredParams: [{ alg: -7, type: "public-key" }, { alg: -257, type: "public-key" }],
         authenticatorSelection: { authenticatorAttachment: "platform", userVerification: "preferred" },
@@ -167,59 +211,77 @@ async function registerWebAuthn(username, email) {
         attestation: "none"
     };
     const credential = await navigator.credentials.create({ publicKey: publicKeyCredentialCreationOptions });
-    userCredentials[username] = { id: credential.id, email: email, publicKey: btoa(JSON.stringify(credential.toJSON())), credentialName: username };
+    userCredentials[username] = { id: credential.id, email: email, credentialName: username };
     localStorage.setItem('webauthn_users', JSON.stringify(userCredentials));
     return true;
 }
 
-// Login with WebAuthn
 async function loginWebAuthn(username) {
     if(!userCredentials[username]) throw new Error('User not found');
     const challenge = randomChallenge();
     const allowCredentials = [{ id: userCredentials[username].id, type: "public-key" }];
-    const publicKeyCredentialRequestOptions = { challenge, allowCredentials, timeout: 60000, userVerification: "preferred", rpId: window.location.hostname };
+    const publicKeyCredentialRequestOptions = { 
+        challenge, 
+        allowCredentials, 
+        timeout: 60000, 
+        userVerification: "preferred", 
+        rpId: window.location.hostname || "localhost" 
+    };
     const assertion = await navigator.credentials.get({ publicKey: publicKeyCredentialRequestOptions });
     if(assertion) return true;
-    throw new Error('Auth failed');
+    throw new Error('Authentication failed');
 }
 
-// Forgot password: OTP (simulated time-based, in real app would email)
 function generateOTP() { return Math.floor(100000 + Math.random() * 900000).toString(); }
 let pendingReset = null;
 function sendOTP(username) {
     if(!userCredentials[username]) throw new Error('User not found');
     let otp = generateOTP();
     pendingReset = { username, otp, expiry: Date.now() + 300000 };
-    alert(`[DEMO OTP] Your code for ${username} is: ${otp}\n(In production, this would be emailed to ${userCredentials[username].email})`);
+    alert(`[OTP Demo] Your recovery code for ${username} is: ${otp}\n\nIn production, this would be emailed to ${userCredentials[username].email}`);
     return true;
 }
-function verifyOTPAndReset(username, otp, newCredentialName) {
-    if(!pendingReset || pendingReset.username !== username || pendingReset.otp !== otp || Date.now() > pendingReset.expiry) throw new Error('Invalid or expired OTP');
-    // Reset: delete old credential and create new registration
+async function verifyOTPAndReset(username, otp) {
+    if(!pendingReset || pendingReset.username !== username || pendingReset.otp !== otp || Date.now() > pendingReset.expiry) 
+        throw new Error('Invalid or expired OTP');
+    let email = userCredentials[username].email;
     delete userCredentials[username];
     localStorage.setItem('webauthn_users', JSON.stringify(userCredentials));
-    return registerWebAuthn(username, userCredentials[username]?.email || 'recovered@local.dev');
+    return registerWebAuthn(username, email);
 }
 
-// Logout
-function logout() { currentUser = null; localStorage.removeItem('currentSession'); document.getElementById('mainApp').style.display = 'none'; document.getElementById('authOverlay').style.display = 'flex'; if(window.swarm) window.swarm.destroy(); location.reload(); }
+function logout() { 
+    currentUser = null; 
+    localStorage.removeItem('currentSession'); 
+    document.getElementById('mainApp').style.display = 'none'; 
+    document.getElementById('authOverlay').style.display = 'flex'; 
+    if(window.swarm) { try { swarm.destroy(); } catch(e) {} }
+}
 
-// Check saved session
-function checkSession() { let saved = localStorage.getItem('currentSession'); if(saved && userCredentials[saved]) { currentUser = saved; initAppAfterAuth(); } }
+function checkSession() { 
+    let saved = localStorage.getItem('currentSession'); 
+    if(saved && userCredentials[saved]) { 
+        currentUser = saved; 
+        initAppAfterAuth(); 
+    } 
+}
 
-// ---------------------------- P2P Social Core (same as before but with user context) ----------------------------
-let swarm = null, peerConnections = new Map(), onlinePeers = new Set(), allPosts = [], followers = new Set(), directMessages = {}, myProfile = {};
+// ---------------------------- P2P Social Core ----------------------------
+let swarm = null, peerConnections = new Map(), onlinePeers = new Set(), allPosts = [], directMessages = {}, myProfile = {};
 
 function loadUserData() { 
     let stored = localStorage.getItem(`p2p_posts_${currentUser}`);
     if(stored) allPosts = JSON.parse(stored);
-    let storedFollows = localStorage.getItem(`p2p_follows_${currentUser}`);
-    if(storedFollows) followers = new Set(JSON.parse(storedFollows));
     let storedDMs = localStorage.getItem(`p2p_messages_${currentUser}`);
     if(storedDMs) directMessages = JSON.parse(storedDMs);
     let profile = localStorage.getItem(`profile_${currentUser}`);
     if(profile) myProfile = JSON.parse(profile);
-    else myProfile = { name: currentUser, bio: 'P2P Social Network 🌐', avatar: `https://ui-avatars.com/api/?name=${currentUser}&background=6366f1&color=fff`, cover: 'https://picsum.photos/id/104/800/200' };
+    else myProfile = { 
+        name: currentUser, 
+        bio: 'Building a decentralized social network 🌐', 
+        avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(currentUser)}&background=6366f1&color=fff&size=128`, 
+        cover: 'https://picsum.photos/id/104/800/200' 
+    };
     saveProfile();
 }
 
@@ -227,62 +289,468 @@ function saveProfile() { localStorage.setItem(`profile_${currentUser}`, JSON.str
 function persistPosts() { localStorage.setItem(`p2p_posts_${currentUser}`, JSON.stringify(allPosts)); }
 function persistMessages() { localStorage.setItem(`p2p_messages_${currentUser}`, JSON.stringify(directMessages)); }
 
-function addPost(post, broadcast = true) { post.id = post.id || Date.now() + '_' + Math.random(); post.likes = post.likes || []; post.comments = post.comments || []; allPosts.unshift(post); persistPosts(); renderFeed(); renderProfileWall(); if(broadcast && swarm) swarm.send({ type: 'NEW_POST', post: post }); }
-function likePost(postId, userId) { let post = allPosts.find(p => p.id == postId); if(post) { if(!post.likes.includes(userId)) post.likes.push(userId); else post.likes = post.likes.filter(id => id !== userId); persistPosts(); renderFeed(); renderProfileWall(); if(swarm) swarm.send({ type: 'LIKE_UPDATE', postId, likes: post.likes }); } }
-function addComment(postId, text, userId, userName) { let post = allPosts.find(p => p.id == postId); if(post && text.trim()) { post.comments.push({ id: Date.now(), userId, userName, text, timestamp: Date.now() }); persistPosts(); renderFeed(); renderProfileWall(); if(swarm) swarm.send({ type: 'COMMENT_UPDATE', postId, comments: post.comments }); } }
-function sharePost(originalPost) { let newPost = { ...originalPost, id: Date.now() + '_share', authorId: currentUser, authorName: myProfile.name, authorAvatar: myProfile.avatar, repostOf: originalPost.id, timestamp: Date.now(), likes: [], comments: [] }; addPost(newPost, true); }
-
-function initP2PSwarm() {
-    if(typeof WebConnect === 'undefined') { setTimeout(initP2PSwarm, 300); return; }
-    swarm = new WebConnect(`OatNet-${currentUser}`, { trackers: ['wss://tracker.webtorrent.dev', 'wss://tracker.openwebtorrent.com'], simplepeer: SimplePeer, wrtc: window.RTCPeerConnection });
-    swarm.on('peer', (peer, peerId) => { onlinePeers.add(peerId); updatePeerUI(); peer.on('data', data => { try { let msg = JSON.parse(data.toString()); handlePeerMessage(msg, peerId); } catch(e) {} }); peer.on('close', () => { onlinePeers.delete(peerId); updatePeerUI(); }); peerConnections.set(peerId, peer); peer.send(JSON.stringify({ type: 'PROFILE_SYNC', profile: myProfile, peerId: currentUser })); });
-    swarm.on('peer-disconnected', (peerId) => { onlinePeers.delete(peerId); peerConnections.delete(peerId); updatePeerUI(); });
+function addPost(post, broadcast = true) { 
+    post.id = post.id || Date.now() + '_' + Math.random(); 
+    post.likes = post.likes || []; 
+    post.comments = post.comments || []; 
+    allPosts.unshift(post); 
+    persistPosts(); 
+    renderFeed(); 
+    renderProfileWall(); 
+    if(broadcast && swarm) swarm.send({ type: 'NEW_POST', post: post }); 
 }
 
-function handlePeerMessage(msg, fromPeerId) { if(msg.type === 'PROFILE_SYNC') { if(!window.profileCache) window.profileCache = {}; window.profileCache[msg.peerId] = msg.profile; updatePeerUI(); } else if(msg.type === 'NEW_POST') { if(!allPosts.some(p => p.id === msg.post.id)) { allPosts.unshift(msg.post); persistPosts(); renderFeed(); renderProfileWall(); } } else if(msg.type === 'LIKE_UPDATE') { let post = allPosts.find(p => p.id == msg.postId); if(post) { post.likes = msg.likes; persistPosts(); renderFeed(); renderProfileWall(); } } else if(msg.type === 'COMMENT_UPDATE') { let post = allPosts.find(p => p.id == msg.postId); if(post) { post.comments = msg.comments; persistPosts(); renderFeed(); renderProfileWall(); } } else if(msg.type === 'CHAT_MSG') { if(!directMessages[msg.from]) directMessages[msg.from] = []; directMessages[msg.from].push({ text: msg.text, from: msg.from, timestamp: Date.now(), outgoing: false }); persistMessages(); renderChatMessages(msg.from); } }
+function likePost(postId, userId) { 
+    let post = allPosts.find(p => p.id == postId); 
+    if(post) { 
+        if(!post.likes.includes(userId)) post.likes.push(userId); 
+        else post.likes = post.likes.filter(id => id !== userId); 
+        persistPosts(); 
+        renderFeed(); 
+        renderProfileWall(); 
+        if(swarm) swarm.send({ type: 'LIKE_UPDATE', postId, likes: post.likes }); 
+    } 
+}
 
-function sendChatToPeer(peerId, text) { if(!peerConnections.has(peerId)) return alert('Peer not connected'); let msg = { type: 'CHAT_MSG', text, from: currentUser }; peerConnections.get(peerId).send(JSON.stringify(msg)); if(!directMessages[peerId]) directMessages[peerId] = []; directMessages[peerId].push({ text, from: currentUser, outgoing: true, timestamp: Date.now() }); persistMessages(); renderChatMessages(peerId); }
+function addComment(postId, text, userId, userName) { 
+    let post = allPosts.find(p => p.id == postId); 
+    if(post && text.trim()) { 
+        post.comments.push({ id: Date.now(), userId, userName, text, timestamp: Date.now() }); 
+        persistPosts(); 
+        renderFeed(); 
+        renderProfileWall(); 
+        if(swarm) swarm.send({ type: 'COMMENT_UPDATE', postId, comments: post.comments }); 
+    } 
+}
 
-// Video call (simplified)
+function sharePost(originalPost) { 
+    let newPost = { 
+        ...originalPost, 
+        id: Date.now() + '_share', 
+        authorId: currentUser, 
+        authorName: myProfile.name, 
+        authorAvatar: myProfile.avatar, 
+        repostOf: originalPost.id, 
+        timestamp: Date.now(), 
+        likes: [], 
+        comments: [] 
+    }; 
+    addPost(newPost, true); 
+}
+
+function initP2PSwarm() {
+    if(typeof WebConnect === 'undefined') { setTimeout(initP2PSwarm, 500); return; }
+    try {
+        swarm = new WebConnect(`OatNet-${currentUser}`, { 
+            trackers: ['wss://tracker.webtorrent.dev', 'wss://tracker.openwebtorrent.com'], 
+            simplepeer: SimplePeer, 
+            wrtc: window.RTCPeerConnection 
+        });
+        swarm.on('peer', (peer, peerId) => { 
+            onlinePeers.add(peerId); 
+            updatePeerUI(); 
+            peer.on('data', data => { 
+                try { 
+                    let msg = JSON.parse(data.toString()); 
+                    handlePeerMessage(msg, peerId); 
+                } catch(e) {} 
+            }); 
+            peer.on('close', () => { 
+                onlinePeers.delete(peerId); 
+                updatePeerUI(); 
+            }); 
+            peerConnections.set(peerId, peer); 
+            peer.send(JSON.stringify({ type: 'PROFILE_SYNC', profile: myProfile, peerId: currentUser })); 
+        });
+        swarm.on('peer-disconnected', (peerId) => { 
+            onlinePeers.delete(peerId); 
+            peerConnections.delete(peerId); 
+            updatePeerUI(); 
+        });
+        window.swarm = swarm;
+    } catch(e) { console.error('Swarm error:', e); }
+}
+
+function handlePeerMessage(msg, fromPeerId) { 
+    if(msg.type === 'PROFILE_SYNC') { 
+        if(!window.profileCache) window.profileCache = {}; 
+        window.profileCache[msg.peerId] = msg.profile; 
+        updatePeerUI(); 
+    } else if(msg.type === 'NEW_POST') { 
+        if(!allPosts.some(p => p.id === msg.post.id)) { 
+            allPosts.unshift(msg.post); 
+            persistPosts(); 
+            renderFeed(); 
+            renderProfileWall(); 
+        } 
+    } else if(msg.type === 'LIKE_UPDATE') { 
+        let post = allPosts.find(p => p.id == msg.postId); 
+        if(post) { 
+            post.likes = msg.likes; 
+            persistPosts(); 
+            renderFeed(); 
+            renderProfileWall(); 
+        } 
+    } else if(msg.type === 'COMMENT_UPDATE') { 
+        let post = allPosts.find(p => p.id == msg.postId); 
+        if(post) { 
+            post.comments = msg.comments; 
+            persistPosts(); 
+            renderFeed(); 
+            renderProfileWall(); 
+        } 
+    } else if(msg.type === 'CHAT_MSG') { 
+        if(!directMessages[msg.from]) directMessages[msg.from] = []; 
+        directMessages[msg.from].push({ text: msg.text, from: msg.from, timestamp: Date.now(), outgoing: false }); 
+        persistMessages(); 
+        if(window.currentChatPeer === msg.from) renderChatMessages(msg.from);
+        const badge = document.getElementById('chatBadge');
+        if(badge) badge.style.display = 'inline-block';
+    } 
+}
+
+function sendChatMessage() {
+    let peerId = window.currentChatPeer;
+    let text = document.getElementById('chatInput').value;
+    if(!peerId || !text) return alert('Select a peer first');
+    if(!peerConnections.has(peerId)) return alert('Peer not connected');
+    let msg = { type: 'CHAT_MSG', text: text, from: currentUser };
+    peerConnections.get(peerId).send(JSON.stringify(msg));
+    if(!directMessages[peerId]) directMessages[peerId] = [];
+    directMessages[peerId].push({ text: text, from: currentUser, outgoing: true, timestamp: Date.now() });
+    persistMessages();
+    renderChatMessages(peerId);
+    document.getElementById('chatInput').value = '';
+}
+
+// Video call
 let videoActive = false, localStream = null, videoPeer = null;
-async function startVideoCall(targetPeerId) { if(videoActive) return; try { localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true }); document.getElementById('localVideo').srcObject = localStream; videoPeer = new SimplePeer({ initiator: true, stream: localStream, trickle: true }); videoPeer.on('signal', data => { if(peerConnections.has(targetPeerId)) peerConnections.get(targetPeerId).send(JSON.stringify({ type: 'VIDEO_OFFER', offer: data })); }); videoPeer.on('stream', remoteStream => document.getElementById('remoteVideo').srcObject = remoteStream); videoPeer.on('close', () => endVideoCall()); document.getElementById('videoCallPanel').style.display = 'block'; videoActive = true; } catch(e) { alert('Camera error'); } }
-function endVideoCall() { if(videoPeer) videoPeer.destroy(); if(localStream) localStream.getTracks().forEach(t=>t.stop()); videoActive=false; document.getElementById('videoCallPanel').style.display='none'; }
+async function startVideoCall(targetPeerId) { 
+    if(videoActive) return; 
+    try { 
+        localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true }); 
+        document.getElementById('localVideo').srcObject = localStream; 
+        videoPeer = new SimplePeer({ initiator: true, stream: localStream, trickle: true }); 
+        videoPeer.on('signal', data => { 
+            if(peerConnections.has(targetPeerId)) 
+                peerConnections.get(targetPeerId).send(JSON.stringify({ type: 'VIDEO_OFFER', offer: data })); 
+        }); 
+        videoPeer.on('stream', remoteStream => { 
+            document.getElementById('remoteVideo').srcObject = remoteStream; 
+        }); 
+        videoPeer.on('close', () => endVideoCall()); 
+        document.getElementById('videoCallPanel').style.display = 'block'; 
+        videoActive = true; 
+        window.videoPeer = videoPeer;
+    } catch(e) { alert('Camera access error: ' + e.message); } 
+}
+function endVideoCall() { 
+    if(videoPeer) videoPeer.destroy(); 
+    if(localStream) localStream.getTracks().forEach(t=>t.stop()); 
+    videoActive=false; 
+    document.getElementById('videoCallPanel').style.display='none'; 
+    window.videoPeer = null;
+}
 
-// WebTorrent
-let client = new WebTorrent();
-window.client = client;
-function addTorrent(magnet) { client.add(magnet, (torrent) => { document.getElementById('torrentFilesList').innerHTML = `<div class="alert alert-success">📀 ${torrent.name}</div>`; torrent.files.forEach(file => { document.getElementById('torrentFilesList').innerHTML += `<div class="col-md-4"><div class="card p-2"><i class="bi bi-file-earplay"></i> ${file.name}<button class="btn btn-sm btn-outline-primary streamBtn mt-2" data-torrent="${torrent.infoHash}" data-index="${file.index}">Stream</button></div></div>`; }); document.querySelectorAll('.streamBtn').forEach(btn => btn.onclick = () => { let t = client.get(btn.dataset.torrent); if(t) t.files[btn.dataset.index].getBlobURL((err, url) => { if(url) window.open(url); }); }); }); }
+// WebTorrent - FIXED: Use window.WebTorrent or WebTorrent
+let client = null;
+function initWebTorrent() {
+    if(typeof window.WebTorrent !== 'undefined') {
+        client = new window.WebTorrent();
+    } else if(typeof WebTorrent !== 'undefined') {
+        client = new WebTorrent();
+    } else {
+        console.error('WebTorrent not loaded yet, retrying...');
+        setTimeout(initWebTorrent, 500);
+        return;
+    }
+    window.client = client;
+    console.log('WebTorrent initialized');
+}
+function addTorrent(magnet) { 
+    if(!client) { alert('WebTorrent loading...'); return; }
+    client.add(magnet, (torrent) => { 
+        document.getElementById('torrentFilesList').innerHTML = `<div class="alert alert-success">✅ Loaded: ${torrent.name}</div>`; 
+        torrent.files.forEach((file, idx) => { 
+            document.getElementById('torrentFilesList').innerHTML += `
+                <div class="col-md-6 col-lg-4 mb-3">
+                    <div class="card p-2">
+                        <i class="bi bi-file-earplay"></i> ${file.name.substring(0, 30)}
+                        <small class="text-muted">${(file.length/1e6).toFixed(2)} MB</small>
+                        <button class="btn btn-sm btn-outline-primary mt-2 streamBtn" data-idx="${idx}">🎬 Stream</button>
+                    </div>
+                </div>`; 
+        }); 
+        document.querySelectorAll('.streamBtn').forEach(btn => { 
+            btn.onclick = () => { 
+                let idx = parseInt(btn.dataset.idx);
+                torrent.files[idx].getBlobURL((err, url) => { 
+                    if(url) window.open(url); 
+                    else alert('Error streaming file');
+                }); 
+            }; 
+        });
+    }); 
+}
 
 // UI Rendering
-function renderFeed() { let feedDiv = document.getElementById('feedList'); if(!feedDiv) return; feedDiv.innerHTML = allPosts.map(post => `<div class="card post-card p-3"><div class="d-flex gap-2"><img src="${post.authorAvatar || 'https://ui-avatars.com/api/?name='+post.authorName}" class="avatar-sm"><div><b>${post.authorName}</b><small class="text-muted ms-2">${new Date(post.timestamp).toLocaleString()}</small></div></div><div class="mt-2">${post.content}${post.mediaUrl ? (post.mediaType?.startsWith('image')?`<img src="${post.mediaUrl}" class="img-fluid rounded-3 mt-2">`:`<video src="${post.mediaUrl}" controls class="w-100 mt-2 rounded-3"></video>`):''}</div><div class="d-flex gap-3 mt-2"><button class="reaction-btn like-btn" data-id="${post.id}"><i class="bi ${post.likes.includes(currentUser)?'bi-hand-thumbs-up-fill text-primary':'bi-hand-thumbs-up'}"></i> ${post.likes.length}</button><button class="reaction-btn comment-toggle" data-id="${post.id}"><i class="bi bi-chat"></i> ${post.comments.length}</button><button class="reaction-btn share-btn" data-id="${post.id}"><i class="bi bi-share-fill"></i> Share</button></div><div class="comment-section mt-2" id="comments-${post.id}" style="display:none;"><div class="comments-list small">${post.comments.map(c=>`<div><b>${c.userName}</b>: ${c.text}</div>`).join('')}</div><div class="input-group mt-1"><input type="text" class="form-control form-control-sm comment-input" data-id="${post.id}" placeholder="Write comment..."><button class="btn btn-sm btn-outline-secondary add-comment" data-id="${post.id}">Post</button></div></div></div>`).join(''); attachPostEvents(); }
-function renderProfileWall() { let wallDiv = document.getElementById('profileWallPosts'); if(wallDiv) wallDiv.innerHTML = allPosts.filter(p => p.authorId === currentUser).map(post => `<div class="card p-2">${post.content}<br><small>❤️ ${post.likes.length} 💬 ${post.comments.length}</small></div>`).join(''); }
-function attachPostEvents() { document.querySelectorAll('.like-btn').forEach(btn => btn.onclick = () => likePost(btn.dataset.id, currentUser)); document.querySelectorAll('.share-btn').forEach(btn => { let post = allPosts.find(p=>p.id == btn.dataset.id); btn.onclick = () => sharePost(post); }); document.querySelectorAll('.comment-toggle').forEach(btn => btn.onclick = () => { let div = document.getElementById('comments-'+btn.dataset.id); if(div) div.style.display = div.style.display==='none'?'block':'none'; }); document.querySelectorAll('.add-comment').forEach(btn => btn.onclick = () => { let inp = document.querySelector(`.comment-input[data-id="${btn.dataset.id}"]`); if(inp.value) addComment(btn.dataset.id, inp.value, currentUser, myProfile.name); inp.value=''; }); }
-function updatePeerUI() { document.getElementById('peerCount').innerText = onlinePeers.size; document.getElementById('onlinePeersList').innerHTML = [...onlinePeers].slice(0,8).map(id=>`<div><i class="bi bi-circle-fill text-success small"></i> ${id.slice(0,8)}</div>`).join(''); document.getElementById('chatPeerList').innerHTML = [...onlinePeers].map(id=>`<a href="#" class="list-group-item list-group-item-action chat-peer-item" data-peer="${id}">🧑 ${id.slice(0,8)}</a>`).join(''); document.querySelectorAll('.chat-peer-item').forEach(el=>el.onclick=(e)=>{ window.currentChatPeer = el.dataset.peer; renderChatMessages(el.dataset.peer); }); }
-function renderChatMessages(peerId) { let container = document.getElementById('chatMessages'); if(!container) return; let msgs = directMessages[peerId] || []; container.innerHTML = msgs.map(m=>`<div class="d-flex ${m.outgoing?'justify-content-end':'justify-content-start'} mb-2"><div class="p-2 rounded-3 ${m.outgoing?'bg-primary text-white':'bg-light'}">${m.text}</div></div>`).join(''); container.scrollTop = container.scrollHeight; }
-function updateProfileUI() { document.getElementById('profileName').innerText = myProfile.name; document.getElementById('profileBio').innerText = myProfile.bio; document.getElementById('profileAvatar').src = myProfile.avatar; document.getElementById('profileCover').src = myProfile.cover; }
-function uploadFile(file, type) { let reader = new FileReader(); reader.onload = (ev) => { let url = ev.target.result; if(type === 'avatar') { myProfile.avatar = url; saveProfile(); } else if(type === 'cover') { myProfile.cover = url; saveProfile(); } else { document.getElementById('postContent').dataset.media = url; document.getElementById('postContent').dataset.mediaType = file.type; } }; reader.readAsDataURL(file); }
+function renderFeed() { 
+    let feedDiv = document.getElementById('feedList'); 
+    if(!feedDiv) return; 
+    if(allPosts.length === 0) {
+        feedDiv.innerHTML = '<div class="text-center text-muted p-5">No posts yet. Create the first post!</div>';
+        return;
+    }
+    feedDiv.innerHTML = allPosts.map(post => `
+        <div class="card post-card p-3">
+            <div class="d-flex gap-2 align-items-start">
+                <img src="${post.authorAvatar || 'https://ui-avatars.com/api/?name='+encodeURIComponent(post.authorName)}" class="avatar-sm">
+                <div class="flex-grow-1">
+                    <div><b>${escapeHtml(post.authorName)}</b> <small class="text-muted">${new Date(post.timestamp).toLocaleString()}</small></div>
+                    <div class="mt-2">${escapeHtml(post.content)}</div>
+                    ${post.mediaUrl ? (post.mediaType?.startsWith('image') ? `<img src="${post.mediaUrl}" class="img-fluid rounded-3 mt-2" style="max-height: 300px;">` : `<video src="${post.mediaUrl}" controls class="w-100 mt-2 rounded-3"></video>`) : ''}
+                    <div class="d-flex gap-3 mt-3">
+                        <button class="reaction-btn like-btn" data-id="${post.id}"><i class="bi ${post.likes.includes(currentUser) ? 'bi-hand-thumbs-up-fill text-primary' : 'bi-hand-thumbs-up'}"></i> ${post.likes.length}</button>
+                        <button class="reaction-btn comment-toggle" data-id="${post.id}"><i class="bi bi-chat"></i> ${post.comments.length}</button>
+                        <button class="reaction-btn share-btn" data-id="${post.id}"><i class="bi bi-share-fill"></i> Share</button>
+                    </div>
+                    <div class="comment-section mt-2" id="comments-${post.id}" style="display:none;">
+                        <div class="comments-list small mb-2">${post.comments.map(c => `<div><b>${escapeHtml(c.userName)}</b>: ${escapeHtml(c.text)}</div>`).join('')}</div>
+                        <div class="input-group mt-1">
+                            <input type="text" class="form-control form-control-sm comment-input" data-id="${post.id}" placeholder="Write a comment...">
+                            <button class="btn btn-sm btn-outline-secondary add-comment" data-id="${post.id}">Post</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `).join(''); 
+    attachPostEvents(); 
+}
 
-function initAppAfterAuth() { document.getElementById('authOverlay').style.display = 'none'; document.getElementById('mainApp').style.display = 'block'; loadUserData(); renderFeed(); renderProfileWall(); updateProfileUI(); initP2PSwarm(); setInterval(() => { renderFeed(); renderProfileWall(); }, 2000); }
+function escapeHtml(str) { if(!str) return ''; return str.replace(/[&<>]/g, function(m) { if(m === '&') return '&amp;'; if(m === '<') return '&lt;'; if(m === '>') return '&gt;'; return m;}); }
 
-// Event bindings for auth
-document.getElementById('loginBtn').onclick = async () => { let username = document.getElementById('loginUsername').value; if(!username) return alert('Enter username'); try { await loginWebAuthn(username); currentUser = username; localStorage.setItem('currentSession', username); initAppAfterAuth(); } catch(e) { alert('Login failed: '+e.message); } };
-document.getElementById('registerWebAuthnBtn').onclick = async () => { let uname = document.getElementById('regUsername').value, email = document.getElementById('regEmail').value; if(!uname || !email) return alert('All fields required'); try { await registerWebAuthn(uname, email); alert('Registration successful! Please login.'); document.getElementById('registerForm').style.display='none'; document.getElementById('loginForm').style.display='block'; } catch(e) { alert('Error: '+e.message); } };
-document.getElementById('showRegisterBtn').onclick = () => { document.getElementById('loginForm').style.display='none'; document.getElementById('registerForm').style.display='block'; document.getElementById('forgotForm').style.display='none'; };
-document.getElementById('backToLoginBtn').onclick = () => { document.getElementById('registerForm').style.display='none'; document.getElementById('loginForm').style.display='block'; document.getElementById('forgotForm').style.display='none'; };
-document.getElementById('showForgotBtn').onclick = () => { document.getElementById('loginForm').style.display='none'; document.getElementById('forgotForm').style.display='block'; };
-document.getElementById('backToLoginFromForgotBtn').onclick = () => { document.getElementById('forgotForm').style.display='none'; document.getElementById('loginForm').style.display='block'; };
-document.getElementById('sendOtpBtn').onclick = () => { let uname = document.getElementById('forgotUsername').value; if(!uname) return; try { sendOTP(uname); document.getElementById('otpSection').style.display='block'; } catch(e) { alert(e.message); } };
-document.getElementById('resetWithOtpBtn').onclick = async () => { let uname = document.getElementById('forgotUsername').value, otp = document.getElementById('otpCode').value, newCred = document.getElementById('newPassword').value; if(!uname || !otp) return; try { await verifyOTPAndReset(uname, otp, newCred); alert('Reset successful! Please login with new passkey.'); location.reload(); } catch(e) { alert(e.message); } };
+function renderProfileWall() { 
+    let wallDiv = document.getElementById('profileWallPosts'); 
+    if(wallDiv) {
+        let myPosts = allPosts.filter(p => p.authorId === currentUser);
+        if(myPosts.length === 0) wallDiv.innerHTML = '<div class="text-muted text-center p-3">No posts yet</div>';
+        else wallDiv.innerHTML = myPosts.map(post => `<div class="card p-2"><strong>${escapeHtml(post.content.substring(0, 100))}</strong><br><small>❤️ ${post.likes.length} 💬 ${post.comments.length} 📅 ${new Date(post.timestamp).toLocaleDateString()}</small></div>`).join('');
+    }
+}
+
+function attachPostEvents() { 
+    document.querySelectorAll('.like-btn').forEach(btn => btn.onclick = () => likePost(btn.dataset.id, currentUser)); 
+    document.querySelectorAll('.share-btn').forEach(btn => { 
+        let post = allPosts.find(p=>p.id == btn.dataset.id); 
+        btn.onclick = () => sharePost(post); 
+    }); 
+    document.querySelectorAll('.comment-toggle').forEach(btn => btn.onclick = () => { 
+        let div = document.getElementById('comments-'+btn.dataset.id); 
+        if(div) div.style.display = div.style.display==='none'?'block':'none'; 
+    }); 
+    document.querySelectorAll('.add-comment').forEach(btn => btn.onclick = () => { 
+        let inp = document.querySelector(`.comment-input[data-id="${btn.dataset.id}"]`); 
+        if(inp.value) addComment(btn.dataset.id, inp.value, currentUser, myProfile.name); 
+        inp.value=''; 
+    }); 
+}
+
+function updatePeerUI() { 
+    document.getElementById('peerCount').innerText = onlinePeers.size; 
+    let listDiv = document.getElementById('onlinePeersList'); 
+    if(listDiv) {
+        if(onlinePeers.size === 0) listDiv.innerHTML = '<div class="text-muted">No peers online</div>';
+        else listDiv.innerHTML = [...onlinePeers].slice(0,10).map(id => `<div><i class="bi bi-circle-fill text-success small"></i> ${id.substring(0, 12)}</div>`).join('');
+    }
+    let chatPeerDiv = document.getElementById('chatPeerList'); 
+    if(chatPeerDiv) {
+        if(onlinePeers.size === 0) chatPeerDiv.innerHTML = '<div class="text-muted p-2">No peers connected</div>';
+        else chatPeerDiv.innerHTML = [...onlinePeers].map(id => `<a href="#" class="list-group-item list-group-item-action chat-peer-item" data-peer="${id}"><i class="bi bi-person-circle"></i> ${id.substring(0, 15)}</a>`).join('');
+        document.querySelectorAll('.chat-peer-item').forEach(el => el.onclick = (e) => { 
+            e.preventDefault();
+            window.currentChatPeer = el.dataset.peer; 
+            renderChatMessages(el.dataset.peer); 
+        });
+    }
+}
+
+function renderChatMessages(peerId) { 
+    let container = document.getElementById('chatMessages'); 
+    if(!container) return; 
+    let msgs = directMessages[peerId] || []; 
+    if(msgs.length === 0) container.innerHTML = '<div class="text-muted text-center p-3">No messages yet</div>';
+    else container.innerHTML = msgs.map(m => `<div class="d-flex ${m.outgoing ? 'justify-content-end' : 'justify-content-start'} mb-2"><div class="p-2 rounded-3 ${m.outgoing ? 'bg-primary text-white' : 'bg-light'}">${escapeHtml(m.text)}<br><small class="${m.outgoing ? 'text-white-50' : 'text-muted'}">${new Date(m.timestamp).toLocaleTimeString()}</small></div></div>`).join('');
+    container.scrollTop = container.scrollHeight; 
+}
+
+function updateProfileUI() { 
+    document.getElementById('profileName').innerText = myProfile.name; 
+    document.getElementById('profileBio').innerText = myProfile.bio; 
+    document.getElementById('profileAvatar').src = myProfile.avatar; 
+    document.getElementById('profileCover').src = myProfile.cover; 
+}
+
+function uploadFile(file, type) { 
+    let reader = new FileReader(); 
+    let progDiv = document.getElementById('uploadProgressContainer');
+    let progBar = document.getElementById('uploadProgressBar');
+    if(progDiv) progDiv.style.display = 'block';
+    reader.onprogress = (e) => { if(e.lengthComputable && progBar) { let pct = (e.loaded/e.total)*100; progBar.style.width = pct+'%'; } };
+    reader.onload = (ev) => { 
+        let url = ev.target.result; 
+        if(type === 'avatar') { myProfile.avatar = url; saveProfile(); }
+        else if(type === 'cover') { myProfile.cover = url; saveProfile(); }
+        else { 
+            document.getElementById('postContent').dataset.media = url; 
+            document.getElementById('postContent').dataset.mediaType = file.type;
+            alert('Media attached!');
+        }
+        if(progDiv) progDiv.style.display = 'none';
+        if(progBar) progBar.style.width = '0%';
+    }; 
+    reader.readAsDataURL(file); 
+}
+
+function initAppAfterAuth() { 
+    document.getElementById('authOverlay').style.display = 'none'; 
+    document.getElementById('mainApp').style.display = 'block'; 
+    loadUserData(); 
+    renderFeed(); 
+    renderProfileWall(); 
+    updateProfileUI(); 
+    initP2PSwarm(); 
+    initWebTorrent();
+    setInterval(() => { renderFeed(); renderProfileWall(); }, 3000); 
+}
+
+// Event bindings
+document.getElementById('loginBtn').onclick = async () => { 
+    let username = document.getElementById('loginUsername').value.trim();
+    if(!username) return alert('Enter username'); 
+    try { 
+        await loginWebAuthn(username); 
+        currentUser = username; 
+        localStorage.setItem('currentSession', username); 
+        initAppAfterAuth(); 
+    } catch(e) { alert('Login failed: '+e.message); } 
+};
+
+document.getElementById('registerWebAuthnBtn').onclick = async () => { 
+    let uname = document.getElementById('regUsername').value.trim(), email = document.getElementById('regEmail').value.trim(); 
+    if(!uname || !email) return alert('All fields required'); 
+    try { 
+        await registerWebAuthn(uname, email); 
+        alert('Registration successful! Please login with your passkey.'); 
+        document.getElementById('registerForm').style.display='none'; 
+        document.getElementById('loginForm').style.display='block'; 
+    } catch(e) { alert('Error: '+e.message); } 
+};
+
+document.getElementById('showRegisterBtn').onclick = () => { 
+    document.getElementById('loginForm').style.display='none'; 
+    document.getElementById('registerForm').style.display='block'; 
+    document.getElementById('forgotForm').style.display='none'; 
+};
+document.getElementById('backToLoginBtn').onclick = () => { 
+    document.getElementById('registerForm').style.display='none'; 
+    document.getElementById('loginForm').style.display='block'; 
+    document.getElementById('forgotForm').style.display='none'; 
+};
+document.getElementById('showForgotBtn').onclick = () => { 
+    document.getElementById('loginForm').style.display='none'; 
+    document.getElementById('forgotForm').style.display='block'; 
+};
+document.getElementById('backToLoginFromForgotBtn').onclick = () => { 
+    document.getElementById('forgotForm').style.display='none'; 
+    document.getElementById('loginForm').style.display='block'; 
+};
+document.getElementById('sendOtpBtn').onclick = () => { 
+    let uname = document.getElementById('forgotUsername').value.trim(); 
+    if(!uname) return alert('Enter username');
+    try { 
+        sendOTP(uname); 
+        document.getElementById('otpSection').style.display='block'; 
+    } catch(e) { alert(e.message); } 
+};
+document.getElementById('resetWithOtpBtn').onclick = async () => { 
+    let uname = document.getElementById('forgotUsername').value.trim(), otp = document.getElementById('otpCode').value.trim(); 
+    if(!uname || !otp) return alert('Enter username and OTP');
+    try { 
+        await verifyOTPAndReset(uname, otp); 
+        alert('Account reset successful! Please login with your new passkey.'); 
+        location.reload(); 
+    } catch(e) { alert(e.message); } 
+};
 document.getElementById('logoutBtn').onclick = logout;
-document.getElementById('publishPostBtn').onclick = () => { let content = document.getElementById('postContent').value; if(!content.trim()) return; let media = document.getElementById('postContent').dataset.media || null; addPost({ authorId: currentUser, authorName: myProfile.name, authorAvatar: myProfile.avatar, content, mediaUrl: media, mediaType: document.getElementById('postContent').dataset.mediaType, likes: [], comments: [], timestamp: Date.now() }, true); document.getElementById('postContent').value = ''; delete document.getElementById('postContent').dataset.media; };
-document.getElementById('attachMediaBtn').onclick = () => { let inp = document.createElement('input'); inp.type='file'; inp.accept='image/*,video/*'; inp.onchange=e=>uploadFile(e.target.files[0], 'post'); inp.click(); };
-document.getElementById('uploadAvatarBtn').onclick = () => { let inp = document.createElement('input'); inp.type='file'; inp.accept='image/*'; inp.onchange=e=>uploadFile(e.target.files[0], 'avatar'); inp.click(); };
-document.getElementById('uploadCoverBtn').onclick = () => { let inp = document.createElement('input'); inp.type='file'; inp.accept='image/*'; inp.onchange=e=>uploadFile(e.target.files[0], 'cover'); inp.click(); };
-document.getElementById('editProfileBtn').onclick = () => { let n=prompt('Name',myProfile.name); if(n) myProfile.name=n; let b=prompt('Bio',myProfile.bio); if(b) myProfile.bio=b; saveProfile(); };
-document.getElementById('sendChatBtn').onclick = () => { if(window.currentChatPeer) sendChatToPeer(window.currentChatPeer, document.getElementById('chatInput').value); document.getElementById('chatInput').value=''; };
-document.getElementById('startVideoCallBtn').onclick = () => { if(onlinePeers.size) startVideoCall([...onlinePeers][0]); else alert('No peers online'); };
+document.getElementById('publishPostBtn').onclick = () => { 
+    let content = document.getElementById('postContent').value; 
+    if(!content.trim()) return alert('Write something!');
+    let media = document.getElementById('postContent').dataset.media || null; 
+    addPost({ 
+        authorId: currentUser, 
+        authorName: myProfile.name, 
+        authorAvatar: myProfile.avatar, 
+        content: content, 
+        mediaUrl: media, 
+        mediaType: document.getElementById('postContent').dataset.mediaType, 
+        likes: [], 
+        comments: [], 
+        timestamp: Date.now() 
+    }, true); 
+    document.getElementById('postContent').value = ''; 
+    delete document.getElementById('postContent').dataset.media; 
+};
+document.getElementById('attachMediaBtn').onclick = () => { 
+    let inp = document.createElement('input'); 
+    inp.type='file'; 
+    inp.accept='image/*,video/*'; 
+    inp.onchange=e => uploadFile(e.target.files[0], 'post'); 
+    inp.click(); 
+};
+document.getElementById('uploadAvatarBtn').onclick = () => { 
+    let inp = document.createElement('input'); 
+    inp.type='file'; 
+    inp.accept='image/*'; 
+    inp.onchange=e => uploadFile(e.target.files[0], 'avatar'); 
+    inp.click(); 
+};
+document.getElementById('uploadCoverBtn').onclick = () => { 
+    let inp = document.createElement('input'); 
+    inp.type='file'; 
+    inp.accept='image/*'; 
+    inp.onchange=e => uploadFile(e.target.files[0], 'cover'); 
+    inp.click(); 
+};
+document.getElementById('editProfileBtn').onclick = () => { 
+    let n=prompt('Display name', myProfile.name); 
+    if(n && n.trim()) myProfile.name = n.trim(); 
+    let b=prompt('Bio', myProfile.bio); 
+    if(b !== null) myProfile.bio = b; 
+    saveProfile(); 
+};
+document.getElementById('sendChatBtn').onclick = sendChatMessage;
+document.getElementById('startVideoCallBtn').onclick = () => { 
+    if(onlinePeers.size) startVideoCall([...onlinePeers][0]); 
+    else alert('No peers online to call'); 
+};
 document.getElementById('closeVideoBtn').onclick = endVideoCall;
-document.getElementById('addMagnetBtn').onclick = () => { let magnet = document.getElementById('magnetInput').value; if(magnet) addTorrent(magnet); };
+document.getElementById('addMagnetBtn').onclick = () => { 
+    let magnet = document.getElementById('magnetInput').value.trim(); 
+    if(magnet) addTorrent(magnet); 
+    else alert('Enter a magnet link or info hash');
+};
+
+// Create chat badge element if needed
+if(!document.getElementById('chatBadge')) {
+    let badge = document.createElement('span');
+    badge.id = 'chatBadge';
+    badge.className = 'badge bg-danger ms-1';
+    badge.style.display = 'none';
+    badge.innerText = '●';
+    let chatTab = document.querySelector('#chat-tab-btn');
+    if(chatTab) chatTab.appendChild(badge);
+}
 
 checkSession();
 </script>
